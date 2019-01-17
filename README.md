@@ -24,5 +24,11 @@ Change application's icon with .icns in a directory.
 
 ```bash
 $ brew install iconb
-$ iconb run {path}
+$ iconb replace {path}
+```
+
+To restore:
+
+```bash
+$ iconb restore {path}
 ```

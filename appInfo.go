@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
-	"os"
 	"strings"
 
 	"howett.net/plist"
@@ -17,6 +16,11 @@ type AppInfo struct {
 	CFBundleIconName     string
 	CFBundleIdentifier   string
 	CFBundleTypeIconFile string
+}
+
+var specials = map[string]string{
+	"Finder":   fmt.Sprintf("Finder is special application. Please create \"Finder\" dir with \"%s\", \"%s\", \"%s\"", FinderIcon, FinderPNG, FinderPNG2X),
+	"Calendar": fmt.Sprintf("Calendar is special application. Please create \"Calendar\" dir with \"%s\", \"%s\"", CalendarIcon, CalendarEmptyIcon),
 }
 
 func (e AppInfo) String() string {
@@ -36,7 +40,7 @@ func GetAppInfo(name string) (info *AppInfo, err error) {
 	}
 
 	// not exist
-	if stat, err := os.Stat(path); os.IsNotExist(err) || !stat.IsDir() {
+	if err := dirExists(path); err != nil {
 		return nil, fmt.Errorf("%s: application not found", path)
 	}
 
@@ -64,13 +68,13 @@ func GetAppInfo(name string) (info *AppInfo, err error) {
 	if strings.Index(info.CFBundleIconFile, ".") == -1 {
 
 		// validate no extension
-		if stat, err := os.Stat(info.GetIconPath()); os.IsExist(err) && !stat.IsDir() {
+		if err := fileExists(info.GetIconPath()); err != nil {
 			log.Debug("no extention valid icon found: %s", plistPath)
 		} else {
 
 			// validate with .icns
 			newPath := info.GetIconPath() + ".icns"
-			if _, err := os.Stat(newPath); !os.IsExist(err) {
+			if err := fileExists(newPath); err != nil {
 				log.Debug("add .icns to no extention icon: %s", info.GetIconPath())
 				info.CFBundleIconFile += ".icns"
 			} else {
@@ -82,9 +86,16 @@ func GetAppInfo(name string) (info *AppInfo, err error) {
 
 	return
 }
-
-func (info AppInfo) ReplaceWithoutBackup(icon *Icon) error {
+func (info AppInfo) Replace(icon *Icon, isRestore bool) error {
 	appIcon := info.GetIconPath()
+
+	// backup
+	if !isRestore {
+		if err := command("cp", "-n", appIcon, backupDir+info.Name+".icns"); err != nil {
+			icon.Error = err
+			return err
+		}
+	}
 
 	// replace
 	if err := command("cp", "-f", icon.Path, appIcon); err != nil {
@@ -99,16 +110,4 @@ func (info AppInfo) ReplaceWithoutBackup(icon *Icon) error {
 	}
 
 	return nil
-}
-
-func (info AppInfo) Replace(icon *Icon, backup string) error {
-	appIcon := info.GetIconPath()
-
-	// backup
-	if err := command("cp", "-n", appIcon, backup+info.Name+".icns"); err != nil {
-		icon.Error = err
-		return err
-	}
-
-	return info.ReplaceWithoutBackup(icon)
 }

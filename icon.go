@@ -12,11 +12,6 @@ type Icon struct {
 	Error error
 }
 
-var specials = map[string]string{
-	"Finder":   "Finder is special application. Please create \"Finder\" dir with ~.png, ~png",
-	"Calendar": "Calendar is special application. Please create \"Calendar\" dir with App-empty.icns, App.icns",
-}
-
 func (icon Icon) GetApp() (*AppInfo, error) {
 	info, err := GetAppInfo(icon.Name)
 
@@ -41,11 +36,11 @@ func getIcons(dir string) ([]*Icon, error) {
 		ext := path.Ext(full)
 		name := strings.TrimSuffix(full, ext)
 
-		log.Debug(file.IsDir(), name, ext)
-
 		if file.IsDir() || ext != ".icns" {
 			continue
 		}
+
+		log.Debug(name, ext)
 
 		icons = append(icons, &Icon{
 			Path: dir + full,

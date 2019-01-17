@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
-	"strings"
 
-	"github.com/go-cmd/cmd"
 	logging "github.com/op/go-logging"
 	"github.com/urfave/cli"
 )
@@ -15,7 +13,16 @@ var dir = ""
 var backupDir = ""
 
 func main() {
+	// syscall.Umask(0)
+	app := appInit()
+	err := app.Run(os.Args)
 
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func appInit() *cli.App {
 	app := cli.NewApp()
 	app.Name = "iconb"
 	app.Usage = "replace application's icon"
@@ -44,6 +51,11 @@ func main() {
 		if dir == "" {
 			return fmt.Errorf("directory path required.")
 		}
+
+		if err := dirExists(dir); err != nil {
+			return err
+		}
+
 		dir += "/"
 
 		backupDir = getBackupDirectory(dir)
@@ -69,46 +81,7 @@ func main() {
 		},
 	}
 
-	err := app.Run(os.Args)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-}
-
-func replace(icons []*Icon, backup bool) (successes []string, errs []string) {
-	for _, icon := range icons {
-		app, err := icon.GetApp()
-
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("[x]%s => %v", icon.Name, err))
-			continue
-		}
-
-		if backup {
-			err = app.Replace(icon, backupDir)
-		} else {
-			err = app.ReplaceWithoutBackup(icon)
-		}
-
-		if err != nil {
-			errs = append(errs, fmt.Sprintf("[x]%s => %s %v", icon.Name, app.AppPath, err))
-			continue
-		}
-
-		successes = append(successes, fmt.Sprintf("[o]%s => %s", icon.Name, app.AppPath))
-	}
-
-	for _, s := range successes {
-		log.Info(s)
-	}
-
-	for _, s := range errs {
-		log.Info(s)
-	}
-
-	return
+	return app
 }
 
 func replaceAction(c *cli.Context) error {
@@ -122,16 +95,12 @@ func replaceAction(c *cli.Context) error {
 		return err
 	}
 
-	successes, errs := replace(icons, true)
+	successes, errs, isSpecialDone := replace(icons, false)
 
 	log.Infof("\n%d icons replaced, %d errors.", len(successes), len(errs))
-
-	if len(errs) == 0 {
-		log.Info(`please run "sudo killall Dock && sudo killall Finder" if icons not refreshed.`)
-	} else {
-		// log.Info(`when permission denied, please run with sudo.`)
+	if isSpecialDone {
+		log.Info(`please run "sudo killall Dock && sudo killall Finder" to refresh Finder / Calendar.`)
 	}
-
 	return nil
 }
 
@@ -142,38 +111,61 @@ func restoreAction(c *cli.Context) error {
 		return err
 	}
 
-	successes, errs := replace(icons, false)
+	successes, errs, isSpecialDone := replace(icons, true)
 
 	log.Infof("\n%d icons restored, %d errors.", len(successes), len(errs))
-
-	if len(errs) == 0 {
-		log.Info(`please run "sudo killall Dock && sudo killall Finder" if icons not refreshed.`)
-	} else {
-		// log.Info(`when permission denied, please run with sudo.`)
+	if isSpecialDone {
+		log.Info(`please run "sudo killall Dock && sudo killall Finder" to refresh Finder / Calendar.`)
 	}
 
 	return nil
 }
 
-func getBackupDirectory(dir string) string {
-	return dir + "backup/"
-}
+func replace(icons []*Icon, isRestore bool) (successes []string, errs []string, isSpecialDone bool) {
+	for _, icon := range icons {
+		app, err := icon.GetApp()
 
-func command(command string, args ...string) error {
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("[x]%s => %v", icon.Name, err))
+			continue
+		}
 
-	log.Debug(command, args)
-	out := <-cmd.NewCmd(command, args...).Start()
+		err = app.Replace(icon, isRestore)
 
-	if out.Error != nil {
-		return out.Error
+		if err != nil {
+			errs = append(errs, fmt.Sprintf("[x]%s => %s %v", icon.Name, app.AppPath, err))
+			continue
+		}
+
+		successes = append(successes, fmt.Sprintf("[o]%s => %s", icon.Name, app.AppPath))
 	}
-	if len(out.Stderr) > 0 {
-		return fmt.Errorf("%s", strings.Join(out.Stderr, "\n"))
+
+	// specials
+	if finderExists(isRestore) {
+		if err := finderReplace(isRestore); err != nil {
+			errs = append(errs, fmt.Sprintf("[x]%s => %v", "Finder", err))
+		} else {
+			successes = append(successes, fmt.Sprintf("[o]%s", "Finder"))
+			isSpecialDone = true
+		}
 	}
 
-	return nil
-}
+	if calendarExists(isRestore) {
+		if err := calendarReplace(isRestore); err != nil {
+			errs = append(errs, fmt.Sprintf("[x]%s => %v", "Calendar", err))
+		} else {
+			successes = append(successes, fmt.Sprintf("[o]%s", "Calendar"))
+			isSpecialDone = true
+		}
+	}
 
-func makeBackupDirectory() error {
-	return os.MkdirAll(backupDir, os.ModeDir)
+	for _, s := range successes {
+		log.Info(s)
+	}
+
+	for _, s := range errs {
+		log.Info(s)
+	}
+
+	return
 }
