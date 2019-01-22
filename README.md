@@ -1,6 +1,6 @@
 # iconb
 
-Change your application icons quickly and easily.
+change application's icon quickly and easily.
 
 ## Quickstart
 
@@ -30,12 +30,11 @@ $ iconb replace {direcotry_path}
 ### General
 
 ```
-[appname].icns
-
 // [appname] equals .app name on /Applications
-```
+// ex) "Google Chrome.icns", "iTunes.icns"
 
-ex ) "Google Chrome.icns", "iTunes.icns"
+- [appname].icns
+```
 
 ### Finder
 
@@ -60,6 +59,6 @@ To change Calendar icon on Dock requires root privileges.
 - Calendar/App-empty.icns
 ```
 
-### icon files
+## Icon Files
 
 We use [mmarfil/yoios](https://github.com/mmarfil/yoios) icons on screenshot. Thanks!
